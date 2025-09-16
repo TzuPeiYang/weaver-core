@@ -66,15 +66,17 @@ def train_classification(
         for X, y, _ in tq:
             inputs = [X[k].to(dev) for k in data_config.input_names]
             label = y[data_config.label_names[0]].long().to(dev)
+            # print(label.size())
             entry_count += label.shape[0]
             try:
                 mask = y[data_config.label_names[0] + '_mask'].bool().to(dev)
             except KeyError:
                 mask = None
             opt.zero_grad()
-            with torch.cuda.amp.autocast(enabled=grad_scaler is not None):
+            with torch.amp.autocast('cuda', enabled=grad_scaler is not None):
                 model_output = model(*inputs)
                 logits, label, _ = _flatten_preds(model_output, label=label, mask=mask)
+                # print("------------------------", logits.size())
                 loss = loss_func(logits, label)
             if grad_scaler is None:
                 loss.backward()
@@ -232,6 +234,7 @@ def evaluate_classification(model, test_loader, dev, epoch, for_training=True, l
         return total_correct / count
     else:
         # convert 2D labels/scores
+        print(scores.shape, entry_count)
         if len(scores) != entry_count:
             if len(labels_counts):
                 labels_counts = np.concatenate(labels_counts)
@@ -240,7 +243,8 @@ def evaluate_classification(model, test_loader, dev, epoch, for_training=True, l
                     labels[k] = ak.unflatten(v, labels_counts)
             else:
                 assert (count % entry_count == 0)
-                scores = scores.reshape((entry_count, int(count / entry_count), -1)).transpose((1, 2))
+                scores = scores.reshape((entry_count, int(count / entry_count), -1))
+                np.savez("score.npz", score=scores)
                 for k, v in labels.items():
                     labels[k] = v.reshape((entry_count, -1))
         observers = {k: _concat(v) for k, v in observers.items()}
@@ -314,10 +318,11 @@ def train_regression(
         for X, y, _ in tq:
             inputs = [X[k].to(dev) for k in data_config.input_names]
             label = y[data_config.label_names[0]].float()
+            # print(label)
             num_examples = label.shape[0]
             label = label.to(dev)
             opt.zero_grad()
-            with torch.cuda.amp.autocast(enabled=grad_scaler is not None):
+            with torch.amp.autocast('cuda', enabled=grad_scaler is not None):
                 model_output = model(*inputs)
                 preds = model_output.squeeze()
                 loss = loss_func(preds, label)
@@ -337,27 +342,27 @@ def train_regression(
             num_batches += 1
             count += num_examples
             total_loss += loss
-            e = preds - label
-            abs_err = e.abs().sum().item()
-            sum_abs_err += abs_err
-            sqr_err = e.square().sum().item()
-            sum_sqr_err += sqr_err
+            # e = preds - label
+            # abs_err = e.abs().sum().item()
+            # sum_abs_err += abs_err
+            # sqr_err = e.square().sum().item()
+            # sum_sqr_err += sqr_err
 
             tq.set_postfix({
                 'lr': '%.2e' % scheduler.get_last_lr()[0] if scheduler else opt.defaults['lr'],
                 'Loss': '%.5f' % loss,
                 'AvgLoss': '%.5f' % (total_loss / num_batches),
-                'MSE': '%.5f' % (sqr_err / num_examples),
-                'AvgMSE': '%.5f' % (sum_sqr_err / count),
-                'MAE': '%.5f' % (abs_err / num_examples),
-                'AvgMAE': '%.5f' % (sum_abs_err / count),
+                # 'MSE': '%.5f' % (sqr_err / num_examples),
+                # 'AvgMSE': '%.5f' % (sum_sqr_err / count),
+                # 'MAE': '%.5f' % (abs_err / num_examples),
+                # 'AvgMAE': '%.5f' % (sum_abs_err / count),
             })
 
             if tb_helper:
                 tb_helper.write_scalars([
                     ("Loss/train", loss, tb_helper.batch_train_count + num_batches),
-                    ("MSE/train", sqr_err / num_examples, tb_helper.batch_train_count + num_batches),
-                    ("MAE/train", abs_err / num_examples, tb_helper.batch_train_count + num_batches),
+                    # ("MSE/train", sqr_err / num_examples, tb_helper.batch_train_count + num_batches),
+                    # ("MAE/train", abs_err / num_examples, tb_helper.batch_train_count + num_batches),
                 ])
                 if tb_helper.custom_fn:
                     with torch.no_grad():
@@ -375,8 +380,8 @@ def train_regression(
     if tb_helper:
         tb_helper.write_scalars([
             ("Loss/train (epoch)", total_loss / num_batches, epoch),
-            ("MSE/train (epoch)", sum_sqr_err / count, epoch),
-            ("MAE/train (epoch)", sum_abs_err / count, epoch),
+            # ("MSE/train (epoch)", sum_sqr_err / count, epoch),
+            # ("MAE/train (epoch)", sum_abs_err / count, epoch),
         ])
         if tb_helper.custom_fn:
             with torch.no_grad():
@@ -411,6 +416,7 @@ def evaluate_regression(model, test_loader, dev, epoch, for_training=True, loss_
                 # X, y: torch.Tensor; Z: ak.Array
                 inputs = [X[k].to(dev) for k in data_config.input_names]
                 label = y[data_config.label_names[0]].float()
+                # print(label)
                 num_examples = label.shape[0]
                 label = label.to(dev)
                 model_output = model(*inputs)
@@ -428,19 +434,19 @@ def evaluate_regression(model, test_loader, dev, epoch, for_training=True, loss_
                 num_batches += 1
                 count += num_examples
                 total_loss += loss * num_examples
-                e = preds - label
-                abs_err = e.abs().sum().item()
-                sum_abs_err += abs_err
-                sqr_err = e.square().sum().item()
-                sum_sqr_err += sqr_err
+                # e = preds - label
+                # abs_err = e.abs().sum().item()
+                # sum_abs_err += abs_err
+                # sqr_err = e.square().sum().item()
+                # sum_sqr_err += sqr_err
 
                 tq.set_postfix({
                     'Loss': '%.5f' % loss,
                     'AvgLoss': '%.5f' % (total_loss / count),
-                    'MSE': '%.5f' % (sqr_err / num_examples),
-                    'AvgMSE': '%.5f' % (sum_sqr_err / count),
-                    'MAE': '%.5f' % (abs_err / num_examples),
-                    'AvgMAE': '%.5f' % (sum_abs_err / count),
+                    # 'MSE': '%.5f' % (sqr_err / num_examples),
+                    # 'AvgMSE': '%.5f' % (sum_sqr_err / count),
+                    # 'MAE': '%.5f' % (abs_err / num_examples),
+                    # 'AvgMAE': '%.5f' % (sum_abs_err / count),
                 })
 
                 if tb_helper:
@@ -459,8 +465,8 @@ def evaluate_regression(model, test_loader, dev, epoch, for_training=True, loss_
         tb_mode = 'eval' if for_training else 'test'
         tb_helper.write_scalars([
             ("Loss/%s (epoch)" % tb_mode, total_loss / count, epoch),
-            ("MSE/%s (epoch)" % tb_mode, sum_sqr_err / count, epoch),
-            ("MAE/%s (epoch)" % tb_mode, sum_abs_err / count, epoch),
+            # ("MSE/%s (epoch)" % tb_mode, sum_sqr_err / count, epoch),
+            # ("MAE/%s (epoch)" % tb_mode, sum_abs_err / count, epoch),
         ])
         if tb_helper.custom_fn:
             with torch.no_grad():

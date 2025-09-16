@@ -414,7 +414,7 @@ def profile(args, model, model_info, device):
             p.step()
 
 
-def optim(args, model, device):
+def optim(args, model, loss_func, device):
     """
     Optimizer and scheduler.
     :param args:
@@ -472,7 +472,9 @@ def optim(args, model, device):
         if len(names_lr_mult):
             _logger.info('Parameters with lr multiplied by %s:\n - %s', mult_factor, '\n - '.join(names_lr_mult))
     else:
-        parameters = model.parameters()
+        parameters = list(model.parameters())
+        
+    parameters = parameters + list(loss_func.parameters())
 
     if args.optimizer == 'ranger':
         from weaver.utils.nn.optimizer.ranger import Ranger
@@ -606,6 +608,7 @@ def model_setup(args, data_config, device='cpu'):
         loss_func = torch.nn.CrossEntropyLoss()
         _logger.warning('Loss function not defined in %s. Will use `torch.nn.CrossEntropyLoss()` by default.',
                         args.network_config)
+    loss_func
     return model, model_info, loss_func
 
 
@@ -790,6 +793,7 @@ def _main(args):
 
     if training_mode:
         model = orig_model.to(dev)
+        loss_func = loss_func.to(dev)
 
         # DistributedDataParallel
         if args.backend is not None:
@@ -797,7 +801,7 @@ def _main(args):
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=gpus, output_device=local_rank, find_unused_parameters=True)
 
         # optimizer & learning rate
-        opt, scheduler = optim(args, model, dev)
+        opt, scheduler = optim(args, model, loss_func, dev)
 
         # DataParallel
         if args.backend is None:
@@ -874,6 +878,7 @@ def _main(args):
                 except AttributeError:
                     pass
             model = orig_model.to(dev)
+            loss_func = loss_func.to(dev)
             model_path = args.model_prefix if args.model_prefix.endswith(
                 '.pt') else args.model_prefix + '_best_epoch_state.pt'
             _logger.info('Loading model %s for eval' % model_path)
@@ -881,6 +886,7 @@ def _main(args):
             if gpus is not None and len(gpus) > 1:
                 model = torch.nn.DataParallel(model, device_ids=gpus)
             model = model.to(dev)
+            loss_func = loss_func.to(dev)
 
         for name, get_test_loader in test_loaders.items():
             test_loader = get_test_loader()

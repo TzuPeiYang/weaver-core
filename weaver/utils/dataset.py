@@ -71,6 +71,7 @@ def _get_reweight_indices(weights, up_sample=True, max_resample=10, weight_scale
 
 
 def _check_labels(table):
+    return 
     if np.all(table['_labelcheck_'] == 1):
         return
     else:

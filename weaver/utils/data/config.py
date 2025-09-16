@@ -48,6 +48,7 @@ class DataConfig(object):
         for k, v in kwargs.items():
             if v is not None:
                 if isinstance(opts[k], dict):
+                    # print("\n\n\n", k,"\n\n\n")
                     opts[k].update(v)
                 else:
                     opts[k] = v
@@ -106,11 +107,12 @@ class DataConfig(object):
             assert (isinstance(self.label_value, list))
             self.label_names = ('_label_',)
             label_exprs = ['ak.to_numpy(%s)' % k for k in self.label_value]
-            self.register('_label_', 'np.argmax(np.stack([%s], axis=1), axis=1)' % (','.join(label_exprs)))
+            self.register('_label_', 'np.stack([%s], axis=1)' % (','.join(label_exprs)))
             self.register('_labelcheck_', 'np.sum(np.stack([%s], axis=1), axis=1)' % (','.join(label_exprs)), 'train')
         else:
             self.label_names = tuple(self.label_value.keys())
             self.register(self.label_value)
+            print("\n\n\n", self.label_names,"\n\n\n")
         self.basewgt_name = '_basewgt_'
         self.weight_name = None
         if opts['weights'] is not None:

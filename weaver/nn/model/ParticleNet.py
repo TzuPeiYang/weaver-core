@@ -136,6 +136,7 @@ class ParticleNet(nn.Module):
                  use_counts=True,
                  for_inference=False,
                  for_segmentation=False,
+                 use_attention=False,
                  **kwargs):
         super(ParticleNet, self).__init__(**kwargs)
 
@@ -150,6 +151,11 @@ class ParticleNet(nn.Module):
             k, channels = layer_param
             in_feat = input_dims if idx == 0 else conv_params[idx - 1][1][-1]
             self.edge_convs.append(EdgeConvBlock(k=k, in_feat=in_feat, out_feats=channels, cpu_mode=for_inference))
+            self.use_attention = use_attention
+            if  self.use_attention and idx == 0:
+                self.norm = nn.LayerNorm(channels[0])
+                self.attn = nn.MultiheadAttention(channels[0], num_heads=1, batch_first=True)
+                self.scale = nn.Parameter(torch.ones(1))
 
         self.use_fusion = use_fusion
         if self.use_fusion:
@@ -179,6 +185,17 @@ class ParticleNet(nn.Module):
 
         self.for_inference = for_inference
 
+    def attention(self, x):
+        # Reshape input for multi-head attention
+        bs, c, w = x.shape
+        x_att = x.reshape(bs, c, w).transpose(1, 2)  # BSxHWxC
+        
+        # Apply Layer Normalization
+        x_att = self.norm(x_att)
+        # Apply Multi-head Attention
+        att_out, att_map  = self.attn(x_att, x_att, x_att)
+        return att_out.transpose(1, 2).reshape(bs, c, w), att_map
+
     def forward(self, points, features, mask=None):
 #         print('points:\n', points)
 #         print('features:\n', features)
@@ -201,11 +218,15 @@ class ParticleNet(nn.Module):
             fts = conv(pts, fts) * mask
             if self.use_fusion:
                 outputs.append(fts)
+            if self.use_attention and idx == 0:
+                # print(self.scale)
+                fts = self.attention(fts)[0] + fts
+
         if self.use_fusion:
             fts = self.fusion_block(torch.cat(outputs, dim=1)) * mask
 
 #         assert(((fts.abs().sum(dim=1, keepdim=True) != 0).float() - mask.float()).abs().sum().item() == 0)
-        
+        # print("---------------------------\n", fts.size())
         if self.for_segmentation:
             x = fts
         else:
