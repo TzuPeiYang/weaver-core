@@ -20,6 +20,8 @@ from weaver.utils.import_tools import import_module
 parser = argparse.ArgumentParser()
 parser.add_argument('--regression-mode', action='store_true', default=False,
                     help='run in regression mode if this flag is set; otherwise run in classification mode')
+parser.add_argument('--mixed-mode', action='store_true', default=False,
+                    help='run in regression mixed mode if this flag is set; otherwise run in classification mode')
 parser.add_argument('-c', '--data-config', type=str,
                     help='data config YAML file')
 parser.add_argument('--extra-selection', type=str, default=None,
@@ -345,7 +347,8 @@ def onnx(args):
                       input_names=model_info['input_names'],
                       output_names=model_info['output_names'],
                       dynamic_axes=model_info.get('dynamic_axes', None),
-                      opset_version=args.onnx_opset)
+                      opset_version=args.onnx_opset,
+                      training=torch.onnx.TrainingMode.EVAL,)
     _logger.info('ONNX model saved to %s', args.export_onnx)
 
     preprocessing_json = os.path.join(os.path.dirname(args.export_onnx), 'preprocess.json')
@@ -722,11 +725,15 @@ def _main(args):
     if args.file_fraction < 1:
         _logger.warning('Use of `file-fraction` is not recommended in general -- prefer using `data-fraction` instead.')
 
-    # classification/regression mode
+    # classification/regression/mixed mode
     if args.regression_mode:
         _logger.info('Running in regression mode')
         from weaver.utils.nn.tools import train_regression as train
         from weaver.utils.nn.tools import evaluate_regression as evaluate
+    elif args.mixed_mode:
+        _logger.info('Running in mixed mode')
+        from weaver.utils.nn.tools import train_mixed as train
+        from weaver.utils.nn.tools import evaluate_mixed as evaluate
     else:
         _logger.info('Running in classification mode')
         from weaver.utils.nn.tools import train_classification as train
