@@ -348,7 +348,8 @@ def onnx(args):
                       output_names=model_info['output_names'],
                       dynamic_axes=model_info.get('dynamic_axes', None),
                       opset_version=args.onnx_opset,
-                      training=torch.onnx.TrainingMode.EVAL,)
+                      training=torch.onnx.TrainingMode.EVAL,
+                      export_params=True)
     _logger.info('ONNX model saved to %s', args.export_onnx)
 
     preprocessing_json = os.path.join(os.path.dirname(args.export_onnx), 'preprocess.json')
