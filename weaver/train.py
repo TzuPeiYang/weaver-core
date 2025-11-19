@@ -128,7 +128,7 @@ parser.add_argument('--predict-output', type=str,
 parser.add_argument('--export-onnx', type=str, default=None,
                     help='export the PyTorch model to ONNX model and save it at the given path (path must ends w/ .onnx); '
                          'needs to set `--data-config`, `--network-config`, and `--model-prefix` (requires the full model path)')
-parser.add_argument('--onnx-opset', type=int, default=15,
+parser.add_argument('--onnx-opset', type=int, default=18,
                     help='ONNX opset version.')
 parser.add_argument('--io-test', action='store_true', default=False,
                     help='test throughput of the dataloader')
@@ -348,7 +348,6 @@ def onnx(args):
                       output_names=model_info['output_names'],
                       dynamic_axes=model_info.get('dynamic_axes', None),
                       opset_version=args.onnx_opset,
-                      training=torch.onnx.TrainingMode.EVAL,
                       export_params=True)
     _logger.info('ONNX model saved to %s', args.export_onnx)
 
