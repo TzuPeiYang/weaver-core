@@ -349,7 +349,8 @@ def onnx(args):
                       output_names=model_info['output_names'],
                       dynamic_axes=model_info.get('dynamic_axes', None),
                       opset_version=args.onnx_opset,
-                      export_params=True)
+                      export_params=True,
+                      training=torch.onnx.TrainingMode.EVAL)
     
     model = ox.load_model(args.export_onnx)
     model = ox.shape_inference.infer_shapes(model)
