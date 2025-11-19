@@ -11,6 +11,7 @@ import numpy as np
 import math
 import copy
 import torch
+import onnx
 
 from torch.utils.data import DataLoader
 from weaver.utils.logger import _logger, _configLogger
@@ -349,6 +350,10 @@ def onnx(args):
                       dynamic_axes=model_info.get('dynamic_axes', None),
                       opset_version=args.onnx_opset,
                       export_params=True)
+    
+    model = onnx.load_model(args.export_onnx)
+    model = onnx.shape_inference.infer_shapes(model)
+    onnx.save(model, args.export_onnx)
     _logger.info('ONNX model saved to %s', args.export_onnx)
 
     preprocessing_json = os.path.join(os.path.dirname(args.export_onnx), 'preprocess.json')
